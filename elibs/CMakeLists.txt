@@ -1,7 +1,7 @@
 externalproject_add(ext_mapmap
     PREFIX          ext_mapmap
-    GIT_REPOSITORY  https://github.com/dthuerck/mapmap_cpu.git
-    GIT_TAG         fa526e0
+    GIT_REPOSITORY  https://github.com/magicplan/mapmap_cpu.git
+    GIT_TAG         ldz/MP-14336-fix-link-errors
     UPDATE_COMMAND  ""
     SOURCE_DIR      ${CMAKE_SOURCE_DIR}/elibs/mapmap
     CONFIGURE_COMMAND ""

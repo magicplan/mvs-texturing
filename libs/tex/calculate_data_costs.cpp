@@ -184,7 +184,7 @@ calculate_face_projection_infos(mve::TriangleMesh::ConstPtr mesh,
                 if (viewing_angle < 0.0f || viewing_direction.dot(view_to_face_vec) < 0.0f)
                     continue;
 
-                if (std::acos(viewing_angle) > MATH_DEG2RAD(75.0f))
+                if (!settings.accept_faces_from_all_viewing_angle && std::acos(viewing_angle) > MATH_DEG2RAD(75.0f))
                     continue;
 
                 /* Projects into the valid part of the TextureView? */

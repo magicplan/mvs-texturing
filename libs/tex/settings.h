@@ -15,6 +15,8 @@
 #include <string>
 
 #include "defines.h"
+#include "mapmap/header/settings.h"
+
 
 template <typename T>
 const std::vector<std::string> choice_strings();
@@ -88,10 +90,30 @@ struct Settings {
     ToneMapping tone_mapping = TONE_MAPPING_NONE;
 
     bool geometric_visibility_test = true;
+    /* Set true to keep faces with viewing angle lower than 75degree */
+    bool accept_faces_from_all_viewing_angle = false;
+    mapmap::mapMAP_control view_selection_control = {
+        .use_multilevel = true,
+        .use_spanning_tree = true,
+        .use_acyclic = true,
+        .spanning_tree_multilevel_after_n_iterations = 5,
+        .force_acyclic = true,
+        .min_acyclic_iterations = 5,
+        .relax_acyclic_maximal = true,
+        .tree_algorithm = mapmap::LOCK_FREE_TREE_SAMPLER,
+
+        /* Set false for non-deterministic (but faster) mapMAP execution. */
+        .sample_deterministic = true,
+        .initial_seed = 548923723,
+    };
     bool global_seam_leveling = true;
     bool local_seam_leveling = true;
     bool hole_filling = true;
     bool keep_unseen_faces = false;
+
+    int max_texture_size = 8 * 1024;
+    int pref_texture_size = 4 * 1024;
+    int min_texture_size = 256;
 };
 
 TEX_NAMESPACE_END

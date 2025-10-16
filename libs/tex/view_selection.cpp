@@ -16,7 +16,7 @@
 TEX_NAMESPACE_BEGIN
 
 void
-view_selection(DataCosts const & data_costs, UniGraph * graph, Settings const &) {
+view_selection(DataCosts const & data_costs, UniGraph * graph, Settings const & settings) {
     using uint_t = unsigned int;
     using cost_t = float;
     constexpr uint_t simd_w = mapmap::sys_max_simd_width<cost_t>();
@@ -100,19 +100,7 @@ view_selection(DataCosts const & data_costs, UniGraph * graph, Settings const &)
     solver.set_termination_criterion(&terminate);
 
     /* Pass configuration arguments (optional) for solve. */
-    mapmap::mapMAP_control ctr;
-    ctr.use_multilevel = true;
-    ctr.use_spanning_tree = true;
-    ctr.use_acyclic = true;
-    ctr.spanning_tree_multilevel_after_n_iterations = 5;
-    ctr.force_acyclic = true;
-    ctr.min_acyclic_iterations = 5;
-    ctr.relax_acyclic_maximal = true;
-    ctr.tree_algorithm = mapmap::LOCK_FREE_TREE_SAMPLER;
-
-    /* Set false for non-deterministic (but faster) mapMAP execution. */
-    ctr.sample_deterministic = true;
-    ctr.initial_seed = 548923723;
+    mapmap::mapMAP_control ctr = settings.view_selection_control;
 
     std::cout << "\tOptimizing:\n\t\tTime[s]\tEnergy" << std::endl;
     solver.optimize(solution, ctr);

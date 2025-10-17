@@ -41,6 +41,6 @@ MaterialLib::save_to_files(std::string const & prefix) const {
 
     for (Material const & material : *this) {
         std::string filename = prefix + "_" + material.name + "_map_Kd.png";
-        mve::image::save_png_file(material.diffuse_map, filename);
+        mve::image::save_file(material.diffuse_map, filename);
     }
 }

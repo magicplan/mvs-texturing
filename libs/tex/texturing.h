@@ -65,8 +65,25 @@ build_adjacency_graph(mve::TriangleMesh::ConstPtr mesh,
  */
 void
 calculate_data_costs(mve::TriangleMesh::ConstPtr mesh,
+    const mve::MeshInfo& meshInfo,
     TextureViews * texture_views, Settings const & settings,
     DataCosts * data_costs);
+
+
+/*
+    Fills texture projection holes by propagating view assignments from adjacent faces.
+
+    This hole-filling algorithm addresses mesh faces that were not assigned any texture
+    views during initial projection (e.g., due to visibility tests, viewing angle constraints,
+    or frustum culling). It iteratively propagates texture view assignments from neighboring
+    faces that were successfully projected.
+*/
+void magicplan_fill_unmapped_faces_from_adjacent_views(
+    std::shared_ptr<const mve::TriangleMesh> mesh,
+    const mve::MeshInfo& meshInfo,
+    std::vector<tex::TextureView>* textureViews,
+    FaceProjectionInfos* faceProjectionInfos,
+    const tex::Settings& settings);
 
 void
 postprocess_face_infos(Settings const & settings,

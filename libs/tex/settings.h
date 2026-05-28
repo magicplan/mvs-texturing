@@ -92,8 +92,6 @@ struct Settings {
     bool geometric_visibility_test = true;
     /* Set true to keep faces with viewing angle lower than 75degree */
     bool accept_faces_from_all_viewing_angle = false;
-    /* If true, this enables hole filling using adjacent views during the data cost calculation */
-    bool magicplan_fill_unmapped_faces_from_adjacent_views = false;
     mapmap::mapMAP_control view_selection_control = {
         .use_multilevel = true,
         .use_spanning_tree = true,

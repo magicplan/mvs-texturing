@@ -135,6 +135,7 @@ void
 TextureView::get_face_info(math::Vec3f const & v1, math::Vec3f const & v2,
     math::Vec3f const & v3, FaceProjectionInfo * face_info, Settings const & settings) const {
 
+    assert(image != NULL);
     assert(settings.data_term != DATA_TERM_GMI || gradient_magnitude != NULL);
 
     math::Vec2f p1 = get_pixel_coords(v1);
@@ -156,9 +157,6 @@ TextureView::get_face_info(math::Vec3f const & v1, math::Vec3f const & v2,
     double gmi = 0.0;
 
     bool sampling_necessary = settings.data_term != DATA_TERM_AREA || settings.outlier_removal != OUTLIER_REMOVAL_NONE;
-    if (sampling_necessary) {
-        assert(image != NULL);
-    }
 
     if (sampling_necessary && area > 0.5f) {
         /* Sort pixels in ascending order of y */

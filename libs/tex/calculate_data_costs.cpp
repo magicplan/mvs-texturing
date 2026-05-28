@@ -306,7 +306,7 @@ postprocess_face_infos(Settings const & settings,
 }
 
 void
-calculate_data_costs(mve::TriangleMesh::ConstPtr mesh, const mve::MeshInfo& meshInfo, std::vector<TextureView> * texture_views,
+calculate_data_costs(mve::TriangleMesh::ConstPtr mesh, std::vector<TextureView> * texture_views,
     Settings const & settings, DataCosts * data_costs) {
 
     std::size_t const num_faces = mesh->get_faces().size() / 3;
@@ -319,9 +319,6 @@ calculate_data_costs(mve::TriangleMesh::ConstPtr mesh, const mve::MeshInfo& mesh
 
     FaceProjectionInfos face_projection_infos(num_faces);
     calculate_face_projection_infos(mesh, texture_views, settings, &face_projection_infos);
-    if (settings.magicplan_fill_unmapped_faces_from_adjacent_views) {
-        magicplan_fill_unmapped_faces_from_adjacent_views(mesh, meshInfo, texture_views, &face_projection_infos, settings);
-    }
     postprocess_face_infos(settings, &face_projection_infos, data_costs);
 }
 

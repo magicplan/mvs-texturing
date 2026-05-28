@@ -90,8 +90,6 @@ struct Settings {
     ToneMapping tone_mapping = TONE_MAPPING_NONE;
 
     bool geometric_visibility_test = true;
-    /* Set true to keep faces with viewing angle lower than 75degree */
-    bool accept_faces_from_all_viewing_angle = false;
     mapmap::mapMAP_control view_selection_control = {
         .use_multilevel = true,
         .use_spanning_tree = true,

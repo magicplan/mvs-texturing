@@ -284,7 +284,7 @@ void global_seam_leveling(UniGraph const &graph,
 
   util::WallTimer timer;
   std::cout << "\tCalculating adjustments:" << std::endl;
-#pragma omp parallel for
+
   tbb::parallel_for(std::size_t(0), std::size_t(3), [&](std::size_t channel) {
     /* Prepare solver. */
     Eigen::ConjugateGradient<SpMat, Eigen::Lower> cg;

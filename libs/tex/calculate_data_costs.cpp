@@ -184,7 +184,7 @@ calculate_face_projection_infos(mve::TriangleMesh::ConstPtr mesh,
                 if (viewing_angle < 0.0f || viewing_direction.dot(view_to_face_vec) < 0.0f)
                     continue;
 
-                if (!settings.accept_faces_from_all_viewing_angle && std::acos(viewing_angle) > MATH_DEG2RAD(75.0f))
+                if (std::acos(viewing_angle) > MATH_DEG2RAD(75.0f))
                     continue;
 
                 /* Projects into the valid part of the TextureView? */
@@ -306,7 +306,7 @@ postprocess_face_infos(Settings const & settings,
 }
 
 void
-calculate_data_costs(mve::TriangleMesh::ConstPtr mesh, const mve::MeshInfo& meshInfo, std::vector<TextureView> * texture_views,
+calculate_data_costs(mve::TriangleMesh::ConstPtr mesh, std::vector<TextureView> * texture_views,
     Settings const & settings, DataCosts * data_costs) {
 
     std::size_t const num_faces = mesh->get_faces().size() / 3;
@@ -319,9 +319,6 @@ calculate_data_costs(mve::TriangleMesh::ConstPtr mesh, const mve::MeshInfo& mesh
 
     FaceProjectionInfos face_projection_infos(num_faces);
     calculate_face_projection_infos(mesh, texture_views, settings, &face_projection_infos);
-    if (settings.magicplan_fill_unmapped_faces_from_adjacent_views) {
-        magicplan_fill_unmapped_faces_from_adjacent_views(mesh, meshInfo, texture_views, &face_projection_infos, settings);
-    }
     postprocess_face_infos(settings, &face_projection_infos, data_costs);
 }
 

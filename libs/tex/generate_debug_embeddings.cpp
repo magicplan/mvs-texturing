@@ -8,6 +8,7 @@
  */
 
 #include <math/vector.h>
+#include <tbb/tbb.h>
 
 #include "debug.h"
 
@@ -72,8 +73,7 @@ generate_debug_embeddings(std::vector<TextureView> * texture_views) {
     std::vector<math::Vec4f> colors;
     generate_debug_colors(colors);
 
-    #pragma omp parallel for
-    for (std::size_t i = 0; i < texture_views->size(); ++i) {
+    tbb::parallel_for(std::size_t(0), texture_views->size(), [&](const std::size_t i) {
         math::Vec4f float_color =  colors[i % colors.size()];
 
         TextureView * texture_view = &(texture_views->at(i));
@@ -104,7 +104,7 @@ generate_debug_embeddings(std::vector<TextureView> * texture_views) {
         }
 
         texture_view->bind_image(image);
-    }
+    });
 }
 
 TEX_NAMESPACE_END

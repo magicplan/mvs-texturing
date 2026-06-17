@@ -13,6 +13,7 @@
 #include <acc/bvh_tree.h>
 #include <Eigen/Core>
 #include <Eigen/LU>
+#include <tbb/tbb.h>
 
 #include "util.h"
 #include "histogram.h"
@@ -144,15 +145,15 @@ calculate_face_projection_infos(mve::TriangleMesh::ConstPtr mesh,
     BVHTree bvh_tree(faces, vertices);
     std::cout << "done. (Took: " << timer.get_elapsed() << " ms)" << std::endl;
 
-    ProgressCounter view_counter("\tCalculating face qualities", num_views);
-    #pragma omp parallel
-    {
-        std::vector<std::pair<std::size_t, FaceProjectionInfo> > projected_face_view_infos;
+    using ProjectedFaceViewInfos = std::vector<std::pair<std::size_t, FaceProjectionInfo>>;
+    tbb::enumerable_thread_specific<ProjectedFaceViewInfos> projected_face_view_infos_per_thread;
 
-        #pragma omp for schedule(dynamic)
-        for (std::uint16_t j = 0; j < static_cast<std::uint16_t>(num_views); ++j) {
-            view_counter.progress<SIMPLE>();
+    tbb::parallel_for(
+      std::uint16_t(0), static_cast<std::uint16_t>(num_views), [&](const std::uint16_t j) {
+        ProjectedFaceViewInfos & projected_face_view_infos =
+            projected_face_view_infos_per_thread.local();
 
+        {
             TextureView * texture_view = &texture_views->at(j);
             texture_view->load_image();
             texture_view->generate_validity_mask();
@@ -233,19 +234,16 @@ calculate_face_projection_infos(mve::TriangleMesh::ConstPtr mesh,
             if (settings.data_term == DATA_TERM_GMI) {
                 texture_view->release_gradient_magnitude();
             }
-            view_counter.inc();
         }
 
         //std::sort(projected_face_view_infos.begin(), projected_face_view_infos.end());
+    });
 
-        #pragma omp critical
-        {
-            for (std::size_t i = projected_face_view_infos.size(); 0 < i; --i) {
-                std::size_t face_id = projected_face_view_infos[i - 1].first;
-                FaceProjectionInfo const & info = projected_face_view_infos[i - 1].second;
-                face_projection_infos->at(face_id).push_back(info);
-            }
-            projected_face_view_infos.clear();
+    for (ProjectedFaceViewInfos & projected_face_view_infos : projected_face_view_infos_per_thread) {
+        for (std::size_t i = projected_face_view_infos.size(); 0 < i; --i) {
+            std::size_t face_id = projected_face_view_infos[i - 1].first;
+            FaceProjectionInfo const & info = projected_face_view_infos[i - 1].second;
+            face_projection_infos->at(face_id).push_back(info);
         }
     }
 }
@@ -255,12 +253,8 @@ postprocess_face_infos(Settings const & settings,
         FaceProjectionInfos * face_projection_infos,
         DataCosts * data_costs) {
 
-    ProgressCounter face_counter("\tPostprocessing face infos",
-        face_projection_infos->size());
-    #pragma omp parallel for schedule(dynamic)
-    for (std::size_t i = 0; i < face_projection_infos->size(); ++i) {
-        face_counter.progress<SIMPLE>();
-
+    tbb::parallel_for(
+      std::size_t(0), face_projection_infos->size(), [&](const std::size_t i) {
         std::vector<FaceProjectionInfo> & infos = face_projection_infos->at(i);
         if (settings.outlier_removal != OUTLIER_REMOVAL_NONE) {
             photometric_outlier_detection(&infos, settings);
@@ -270,9 +264,7 @@ postprocess_face_infos(Settings const & settings,
                 infos.end());
         }
         std::sort(infos.begin(), infos.end());
-
-        face_counter.inc();
-    }
+    });
 
     /* Determine the function for the normlization. */
     float max_quality = 0.0f;

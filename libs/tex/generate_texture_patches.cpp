@@ -14,6 +14,7 @@
 #include <mve/image_tools.h>
 #include <Eigen/SparseCore>
 #include <Eigen/SparseLU>
+#include <tbb/tbb.h>
 
 #include "texturing.h"
 
@@ -39,8 +40,7 @@ T clamp(T const & v, T const & lo, T const & hi) {
 
 void merge_vertex_projection_infos(std::vector<std::vector<VertexProjectionInfo> > * vertex_projection_infos) {
     /* Merge vertex infos within the same texture patch. */
-    #pragma omp parallel for
-    for (std::size_t i = 0; i < vertex_projection_infos->size(); ++i) {
+    tbb::parallel_for(std::size_t(0), vertex_projection_infos->size(), [&](const std::size_t i) {
         std::vector<VertexProjectionInfo> & infos = vertex_projection_infos->at(i);
 
         std::map<std::size_t, VertexProjectionInfo> info_map;
@@ -61,7 +61,7 @@ void merge_vertex_projection_infos(std::vector<std::vector<VertexProjectionInfo>
         for (it = info_map.begin(); it != info_map.end(); ++it) {
             infos.push_back(it->second);
         }
-    }
+    });
 }
 
 /** Struct representing a TexturePatch candidate
@@ -140,7 +140,9 @@ generate_candidate(int label, TextureView const & texture_view,
 bool fill_hole(std::vector<std::size_t> const & hole, UniGraph const & graph,
     mve::TriangleMesh::ConstPtr mesh, mve::MeshInfo const & mesh_info,
     std::vector<std::vector<VertexProjectionInfo> > * vertex_projection_infos,
-    std::vector<TexturePatch::Ptr> * texture_patches) {
+    std::vector<TexturePatch::Ptr> * texture_patches,
+    tbb::spin_mutex * vertex_projection_infos_mutex,
+    tbb::spin_mutex * texture_patches_mutex) {
 
     mve::TriangleMesh::FaceList const & mesh_faces = mesh->get_faces();
     mve::TriangleMesh::VertexList const & vertices = mesh->get_vertices();
@@ -283,8 +285,9 @@ bool fill_hole(std::vector<std::size_t> const & hole, UniGraph const & graph,
         std::size_t vi0 = border[j];
         std::size_t vi1 = border[(j + 1) % border.size()];
         std::vector<VertexProjectionInfo> vpi0, vpi1;
-        #pragma omp critical (vpis)
         {
+            tbb::spin_mutex::scoped_lock lock(*vertex_projection_infos_mutex);
+
             vpi0 = vertex_projection_infos->at(vi0);
             vpi1 = vertex_projection_infos->at(vi1);
         }
@@ -427,8 +430,9 @@ bool fill_hole(std::vector<std::size_t> const & hole, UniGraph const & graph,
     //DEBUG image->fill_color(*math::Vec4uc(0, 255, 0, 255));
     TexturePatch::Ptr texture_patch = TexturePatch::create(0, hole, texcoords, image);
     std::size_t texture_patch_id;
-    #pragma omp critical
     {
+        tbb::spin_mutex::scoped_lock lock(*texture_patches_mutex);
+
         texture_patches->push_back(texture_patch);
         texture_patch_id = texture_patches->size() - 1;
     }
@@ -443,7 +447,9 @@ bool fill_hole(std::vector<std::size_t> const & hole, UniGraph const & graph,
             }
         }
         VertexProjectionInfo info = {texture_patch_id, projections[j], faces};
-        #pragma omp critical (vpis)
+
+        tbb::spin_mutex::scoped_lock lock(*vertex_projection_infos_mutex);
+
         vertex_projection_infos->at(vertex_id).push_back(info);
     }
 
@@ -462,12 +468,13 @@ generate_texture_patches(UniGraph const & graph, mve::TriangleMesh::ConstPtr mes
     mve::TriangleMesh::FaceList const & mesh_faces = mesh->get_faces();
     mve::TriangleMesh::VertexList const & vertices = mesh->get_vertices();
     vertex_projection_infos->resize(vertices.size());
+    tbb::spin_mutex vertex_projection_infos_mutex;
+    tbb::spin_mutex texture_patches_mutex;
 
     std::size_t num_patches = 0;
 
     std::cout << "\tRunning... " << std::flush;
-    #pragma omp parallel for schedule(dynamic)
-    for (std::size_t i = 0; i < texture_views->size(); ++i) {
+    tbb::parallel_for(std::size_t(0), texture_views->size(), [&](const std::size_t i) {
 
         std::vector<std::vector<std::size_t> > subgraphs;
         int const label = i + 1;
@@ -511,8 +518,9 @@ generate_texture_patches(UniGraph const & graph, mve::TriangleMesh::ConstPtr mes
         for (; it != candidates.end(); ++it) {
             std::size_t texture_patch_id;
 
-            #pragma omp critical
             {
+                tbb::spin_mutex::scoped_lock lock(texture_patches_mutex);
+
                 texture_patches->push_back(it->texture_patch);
                 texture_patch_id = num_patches++;
             }
@@ -528,12 +536,13 @@ generate_texture_patches(UniGraph const & graph, mve::TriangleMesh::ConstPtr mes
 
                     VertexProjectionInfo info = {texture_patch_id, projection, {face_id}};
 
-                    #pragma omp critical
+                    tbb::spin_mutex::scoped_lock lock(vertex_projection_infos_mutex);
+
                     vertex_projection_infos->at(vertex_id).push_back(info);
                 }
             }
         }
-    }
+    });
 
     merge_vertex_projection_infos(vertex_projection_infos);
 
@@ -542,26 +551,29 @@ generate_texture_patches(UniGraph const & graph, mve::TriangleMesh::ConstPtr mes
         std::vector<std::vector<std::size_t> > subgraphs;
         graph.get_subgraphs(0, &subgraphs);
 
-        #pragma omp parallel for schedule(dynamic)
-        for (std::size_t i = 0; i < subgraphs.size(); ++i) {
+        tbb::spin_mutex unseen_faces_mutex;
+        tbb::parallel_for(std::size_t(0), subgraphs.size(), [&](const std::size_t i) {
             std::vector<std::size_t> const & subgraph = subgraphs[i];
 
             bool success = false;
             if (settings.hole_filling) {
                 success = fill_hole(subgraph, graph, mesh, mesh_info,
-                    vertex_projection_infos, texture_patches);
+                    vertex_projection_infos, texture_patches,
+                    &vertex_projection_infos_mutex,
+                    &texture_patches_mutex);
             }
 
             if (success) {
                 num_patches += 1;
             } else {
                 if (settings.keep_unseen_faces) {
-                    #pragma omp critical
+                    tbb::spin_mutex::scoped_lock lock(unseen_faces_mutex);
+
                     unseen_faces.insert(unseen_faces.end(),
                         subgraph.begin(), subgraph.end());
                 }
             }
-        }
+        });
 
         if (!unseen_faces.empty()) {
             mve::FloatImage::Ptr image = mve::FloatImage::create(3, 3, 3);

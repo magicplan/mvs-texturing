@@ -8,6 +8,7 @@
  */
 
 #include <math/accum.h>
+#include <tbb/tbb.h>
 
 #include "progress_counter.h"
 #include "texturing.h"
@@ -175,9 +176,7 @@ local_seam_leveling(UniGraph const & graph, mve::TriangleMesh::ConstPtr mesh,
         }
     }
 
-    ProgressCounter texture_patch_counter("\tBlending texture patches", texture_patches->size());
-    #pragma omp parallel for schedule(dynamic)
-    for (std::size_t i = 0; i < texture_patches->size(); ++i) {
+    tbb::parallel_for(std::size_t(0), texture_patches->size(), [&](const std::size_t i) {
         TexturePatch::Ptr texture_patch = texture_patches->at(i);
         mve::FloatImage::Ptr image = texture_patch->get_image()->duplicate();
 
@@ -190,8 +189,6 @@ local_seam_leveling(UniGraph const & graph, mve::TriangleMesh::ConstPtr mesh,
             draw_line(line.from, line.to, *line.color, texture_patch);
         }
 
-        texture_patch_counter.progress<SIMPLE>();
-
         /* Only alter a small strip of texture patches originating from input images. */
         if (texture_patch->get_label() != 0) {
             texture_patch->prepare_blending_mask(STRIP_SIZE);
@@ -199,8 +196,7 @@ local_seam_leveling(UniGraph const & graph, mve::TriangleMesh::ConstPtr mesh,
 
         texture_patch->blend(image);
         texture_patch->release_blending_mask();
-        texture_patch_counter.inc();
-    }
+    });
 }
 
 TEX_NAMESPACE_END

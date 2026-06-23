@@ -14,6 +14,7 @@
 #include <math/accum.h>
 #include <Eigen/SparseCore>
 #include <Eigen/IterativeLinearSolvers>
+#include <tbb/tbb.h>
 
 #include "texturing.h"
 #include "seam_leveling.h"
@@ -254,8 +255,10 @@ global_seam_leveling(UniGraph const & graph, mve::TriangleMesh::ConstPtr mesh,
 
     util::WallTimer timer;
     std::cout << "\tCalculating adjustments:"<< std::endl;
-    #pragma omp parallel for
-    for (std::size_t channel = 0; channel < 3; ++channel) {
+
+    tbb::spin_mutex adjust_values_mutex;
+
+    tbb::parallel_for(std::size_t(0), std::size_t(3), [&](std::size_t channel) {
         /* Prepare solver. */
         Eigen::ConjugateGradient<SpMat, Eigen::Lower> cg;
         cg.setMaxIterations(1000);
@@ -276,26 +279,20 @@ global_seam_leveling(UniGraph const & graph, mve::TriangleMesh::ConstPtr mesh,
         /* Subtract mean because system is underconstrained and we seek the solution with minimal adjustments. */
         x = x.array() - x.mean();
 
-        #pragma omp critical
-        std::cout << "\t\tColor channel " << channel << ": CG took "
-            << cg.iterations() << " iterations. Residual is " << cg.error() << std::endl;
+        tbb::spin_mutex::scoped_lock lock(adjust_values_mutex);
 
-        #pragma omp critical
         for (std::size_t i = 0; i < num_vertices; ++i) {
             for (std::size_t j = 0; j < labels[i].size(); ++j) {
                 std::size_t label = labels[i][j];
                 adjust_values[i][label][channel] = x[vertlabel2row[i][label]];
             }
         }
-    }
+    });
     std::cout << "\t\tTook " << timer.get_elapsed_sec() << " seconds" << std::endl;
 
     mve::TriangleMesh::FaceList const & mesh_faces = mesh->get_faces();
 
-    ProgressCounter texture_patch_counter("\tAdjusting texture patches", texture_patches->size());
-    #pragma omp parallel for schedule(dynamic)
-    for (std::size_t i = 0; i < texture_patches->size(); ++i) {
-        texture_patch_counter.progress<SIMPLE>();
+    tbb::parallel_for(std::size_t(0), texture_patches->size(), [&](std::size_t i) {
 
         TexturePatch::Ptr texture_patch = texture_patches->at(i);
 
@@ -306,8 +303,7 @@ global_seam_leveling(UniGraph const & graph, mve::TriangleMesh::ConstPtr mesh,
         /* Only adjust texture_patches originating form input images. */
         if (label == 0) {
             texture_patch->adjust_colors(patch_adjust_values);
-            texture_patch_counter.inc();
-            continue;
+            return;
         };
 
         for (std::size_t j = 0; j < faces.size(); ++j) {
@@ -319,8 +315,7 @@ global_seam_leveling(UniGraph const & graph, mve::TriangleMesh::ConstPtr mesh,
         }
 
         texture_patch->adjust_colors(patch_adjust_values);
-        texture_patch_counter.inc();
-    }
+    });
 }
 
 TEX_NAMESPACE_END

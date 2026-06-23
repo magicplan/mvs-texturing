@@ -173,13 +173,13 @@ int main(int argc, char **argv) {
         } else {
             ProgressCounter texture_patch_counter("Calculating validity masks for texture patches", texture_patches.size());
             #pragma omp parallel for schedule(dynamic)
-            for (std::size_t i = 0; i < texture_patches.size(); ++i) {
+            tbb::parallel_for(std::size_t(0), texture_patches.size(), [&](const std::size_t i) {
                 texture_patch_counter.progress<SIMPLE>();
                 TexturePatch::Ptr texture_patch = texture_patches[i];
                 std::vector<math::Vec3f> patch_adjust_values(texture_patch->get_faces().size() * 3, math::Vec3f(0.0f));
                 texture_patch->adjust_colors(patch_adjust_values);
                 texture_patch_counter.inc();
-            }
+            });
             timer.measure("Calculating texture patch validity masks");
         }
 

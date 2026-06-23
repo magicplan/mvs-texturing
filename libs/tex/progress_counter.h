@@ -52,7 +52,6 @@ ProgressCounter::inc(void) {
         std::stringstream ss;
         ss << clear << task << " 100%... done. (Took "
             << timer.get_elapsed_sec() << "s)";
-        #pragma omp critical(progress_counter_inc)
         std::cout << ss.rdbuf() << std::endl;
     }
 }
@@ -79,7 +78,6 @@ ProgressCounter::progress(void) {
             ss << " eta ~ " << eta << " s";
         }
 
-        #pragma omp critical(progress_counter_progress)
         std::cout << ss.rdbuf() << std::flush;
     }
 }

@@ -13,6 +13,7 @@
 #include <mve/image_tools.h>
 #include <mve/bundle_io.h>
 #include <mve/scene.h>
+#include <tbb/tbb.h>
 
 #include "progress_counter.h"
 #include "texturing.h"
@@ -108,10 +109,9 @@ from_images_and_camera_files(std::string const & path,
         }
     }
 
-    ProgressCounter view_counter("\tLoading", files.size() / 2);
-    #pragma omp parallel for
-    for (std::size_t i = 0; i < files.size(); i += 2) {
-        view_counter.progress<SIMPLE>();
+    tbb::spin_mutex texture_views_mutex;
+    tbb::parallel_for(std::size_t(0), files.size() / 2, [&](const std::size_t i_div_2) {
+        std::size_t i = i_div_2 * 2;
         const std::string cam_file = files[i];
         const std::string img_file = files[i + 1];
 
@@ -126,7 +126,7 @@ from_images_and_camera_files(std::string const & path,
         util::Tokenizer tok_ext, tok_int;
         tok_ext.split(cam_ext_str);
         tok_int.split(cam_int_str);
-        #pragma omp critical
+
         if (tok_ext.size() != 12 || tok_int.size() < 1) {
             std::cerr << "Invalid CAM file: " << util::fs::basename(cam_file) << std::endl;
             std::exit(EXIT_FAILURE);
@@ -168,11 +168,9 @@ from_images_and_camera_files(std::string const & path,
             mve::image::save_file(image, image_file);
         }
 
-        #pragma omp critical
+        tbb::spin_mutex::scoped_lock lock(texture_views_mutex);
         texture_views->push_back(TextureView(i / 2, cam_info, image_file));
-
-        view_counter.inc();
-    }
+    });
 }
 
 void
@@ -183,10 +181,8 @@ from_nvm_scene(std::string const & nvm_file,
     mve::Bundle::Ptr bundle = mve::load_nvm_bundle(nvm_file, &nvm_cams);
     mve::Bundle::Cameras& cameras = bundle->get_cameras();
 
-    ProgressCounter view_counter("\tLoading", cameras.size());
-    #pragma omp parallel for
-    for (std::size_t i = 0; i < cameras.size(); ++i) {
-        view_counter.progress<SIMPLE>();
+    tbb::spin_mutex texture_views_mutex;
+    tbb::parallel_for(std::size_t(0), cameras.size(), [&](std::size_t i) {
         mve::CameraInfo& mve_cam = cameras[i];
         mve::NVMCameraInfo const& nvm_cam = nvm_cams[i];
 
@@ -208,11 +204,9 @@ from_nvm_scene(std::string const & nvm_file,
         );
         mve::image::save_file(image, image_file);
 
-        #pragma omp critical
+        tbb::spin_mutex::scoped_lock lock(texture_views_mutex);
         texture_views->push_back(TextureView(i, mve_cam, image_file));
-
-        view_counter.inc();
-    }
+    });
 }
 
 void

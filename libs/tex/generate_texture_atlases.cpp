@@ -14,6 +14,7 @@
 
 #include <util/timer.h>
 #include <mve/image_tools.h>
+#include <tbb/tbb.h>
 
 #include "defines.h"
 #include "settings.h"
@@ -110,10 +111,9 @@ generate_texture_atlases(std::vector<TexturePatch::Ptr> * orig_texture_patches,
 
     std::size_t const total_num_patches = texture_patches.size();
     std::size_t remaining_patches = texture_patches.size();
+    tbb::task_group finalize_tasks;
 
-    #pragma omp parallel
     {
-    #pragma omp single
     {
 
     while (!texture_patches.empty()) {
@@ -143,15 +143,14 @@ generate_texture_atlases(std::vector<TexturePatch::Ptr> * orig_texture_patches,
             }
         }
 
-        #pragma omp task
-        texture_atlas->finalize();
+        finalize_tasks.run([texture_atlas] { texture_atlas->finalize(); });
     }
 
     std::cout << "\r\tWorking on atlas " << texture_atlases->size()
         << " 100%... done." << std::endl;
     util::WallTimer timer;
     std::cout << "\tFinalizing texture atlases... " << std::flush;
-    #pragma omp taskwait
+    finalize_tasks.wait();
     std::cout << "done. (Took: " << timer.get_elapsed_sec() << "s)" << std::endl;
 
     /* End of single region */
